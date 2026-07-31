@@ -3,10 +3,11 @@ import assert from "node:assert/strict";
 import { buildPrompt, fallbackReport } from "../src/report.js";
 
 test("el prompt impide acciones y limita el paquete", () => {
-  const prompt = buildPrompt("/tmp/evidence.json");
+  const prompt = buildPrompt('{"jobs":[]}');
   assert.match(prompt, /Solo puedes leer/);
   assert.match(prompt, /No ejecutes comandos/);
-  assert.match(prompt, /\/tmp\/evidence.json/);
+  assert.match(prompt, /BEGIN EVIDENCE/);
+  assert.match(prompt, /\{"jobs":\[\]\}/);
 });
 
 test("genera informe parcial con avisos", () => {

@@ -4,7 +4,8 @@ import type { Config } from "./config.js";
 import { buildPrompt } from "./report.js";
 
 export async function analyzeWithCodex(config: Config, evidencePath: string): Promise<string> {
-  const prompt = buildPrompt(evidencePath);
+  const evidenceJson = await readFile(evidencePath, "utf8");
+  const prompt = buildPrompt(evidenceJson);
   return new Promise((resolve, reject) => {
     const child = spawn(config.codexBin, ["exec", "-s", "read-only", "-C", config.projectRoot, "-"], { stdio: ["pipe", "pipe", "pipe"] });
     let stdout = "";
