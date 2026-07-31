@@ -3,7 +3,7 @@ import { collectEvidence } from "./collect.js";
 import { loadConfig } from "./config.js";
 import { analyzeWithCodex, verifyCodex } from "./codex.js";
 import { sendEmail } from "./email.js";
-import { fallbackReport } from "./report.js";
+import { buildHtmlReport, fallbackReport } from "./report.js";
 import { ensureStorage, pruneStorage, readPending, readStored, removeStored, writeJson, writeReport } from "./storage.js";
 import { installCron } from "./cron.js";
 
@@ -30,6 +30,7 @@ async function run(): Promise<void> {
   let report: string;
   try { report = await retry(() => analyzeWithCodex(config, evidencePath)); }
   catch (error) { report = fallbackReport(evidence, String(error)); }
+  const html = buildHtmlReport(report, evidence);
   const subject = `CronWatch — resumen diario — ${stamp}`;
   const reportName = `${stamp}.txt`;
   await writeReport(config, reportName, report);
@@ -42,7 +43,7 @@ async function run(): Promise<void> {
       await retry(async () => sendEmail(config.resendApiKey!, config.resendFrom!, config.reportTo, `CronWatch — informe pendiente — ${pending.replace(".txt", "")}`, await readStored(config, "pending", pending)));
       await removeStored(config, "pending", pending);
     }
-    await retry(() => sendEmail(config.resendApiKey!, config.resendFrom!, config.reportTo, subject, report));
+    await retry(() => sendEmail(config.resendApiKey!, config.resendFrom!, config.reportTo, subject, report, html));
   } catch (error) {
     await writeReport(config, reportName, `${report}\n\n[Correo pendiente por fallo de Resend: ${String(error)}]`, true);
     throw error;
