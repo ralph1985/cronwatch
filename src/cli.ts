@@ -21,18 +21,29 @@ function dateStamp(config: Awaited<ReturnType<typeof loadConfig>>): string {
   return new Intl.DateTimeFormat("sv-SE", { timeZone: config.timezone }).format(new Date());
 }
 
+function runStamp(config: Awaited<ReturnType<typeof loadConfig>>): string {
+  const now = new Date();
+  const stamp = new Intl.DateTimeFormat("sv-SE", {
+    timeZone: config.timezone,
+    dateStyle: "short",
+    timeStyle: "medium"
+  }).format(now).replaceAll("/", "-").replaceAll(",", "").replaceAll(" ", "_").replaceAll(":", "-");
+  return `${stamp}-${String(now.getMilliseconds()).padStart(3, "0")}`;
+}
+
 async function run(): Promise<void> {
   const config = await loadConfig();
   await ensureStorage(config);
   const stamp = dateStamp(config);
+  const executionStamp = runStamp(config);
   const evidence = await retry(() => collectEvidence(config));
   const evidencePath = await writeJson(config, "evidence", `${stamp}.json`, evidence);
   let report: string;
   try { report = await retry(() => analyzeWithCodex(config, evidencePath)); }
   catch (error) { report = fallbackReport(evidence, String(error)); }
   const html = buildHtmlReport(report, evidence);
-  const subject = `CronWatch — resumen diario — ${stamp}`;
-  const reportName = `${stamp}.txt`;
+  const subject = `CronWatch — informe — ${executionStamp}`;
+  const reportName = `${executionStamp}.txt`;
   await writeReport(config, reportName, report);
   if (!config.resendApiKey || !config.resendFrom || !config.reportTo.length) {
     await writeReport(config, reportName, `${report}\n\n[Correo no enviado: faltan RESEND_API_KEY, RESEND_FROM o REPORT_TO.]`, true);

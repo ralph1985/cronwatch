@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import path from "node:path";
 import { promisify } from "node:util";
 import type { Config } from "./config.js";
 
@@ -23,7 +24,11 @@ export async function installCron(config: Config): Promise<void> {
 
 export function buildCrontab(existing: string, config: Config): string {
   const withoutBlock = existing.replace(new RegExp(`${BEGIN}[\\s\\S]*?${END}\\n?`, "g"), "");
-  const command = `cd ${shellQuote(config.projectRoot)} && /usr/bin/env PATH=/home/rafa/.local/bin:/home/rafa/.local/share/pnpm:/usr/local/bin:/usr/bin:/bin pnpm start >> ${shellQuote(config.varRoot + "/logs/cronwatch.cron.log")} 2>&1`;
+  // Cron does not load the interactive shell, so PATH-based pnpm resolution
+  // breaks when Node is installed through nvm. Pin the package-manager shim
+  // next to the Node executable used to install this crontab entry.
+  const pnpmBin = path.join(path.dirname(process.execPath), "pnpm");
+  const command = `cd ${shellQuote(config.projectRoot)} && ${shellQuote(pnpmBin)} start >> ${shellQuote(config.varRoot + "/logs/cronwatch.cron.log")} 2>&1`;
   return `${withoutBlock.trimEnd()}${withoutBlock.trim() ? "\n\n" : ""}${BEGIN}\n${config.schedule} ${command}\n${END}\n`;
 }
 
