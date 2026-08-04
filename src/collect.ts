@@ -4,7 +4,8 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import type { Config } from "./config.js";
 import { limitText } from "./redaction.js";
-import type { Evidence, ScheduledJob, JobSource } from "./types.js";
+import type { BackupCheck, Evidence, ScheduledJob, JobSource } from "./types.js";
+import { formatWindow, inWindow, reportWindow, type ReportWindow } from "./time-window.js";
 
 const exec = promisify(execFile);
 const CRON_RE = /^(\S+\s+\S+\s+\S+\s+\S+\s+\S+)\s+(.+)$/;
@@ -39,7 +40,51 @@ async function commandText(command: string, args: string[]): Promise<{ ok: boole
   }
 }
 
+const BACKUP_SOURCES = [
+  { project: "Jucart", provider: "Supabase", log: "/home/rafa/dev/jucart/var/log/supabase-backup.cron.log" },
+  { project: "Irati", provider: "Supabase", log: "/home/rafa/dev/irati-app/var/log/supabase-backup.cron.log" },
+  { project: "encuesta-simple", provider: "Neon", log: "/home/rafa/dev/encuesta-simple/var/log/neon-backup.log" }
+] as const;
+
+function timestampInLine(line: string): Date | undefined {
+  const utc = line.match(/(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z/);
+  if (utc) return new Date(`${utc[1]}-${utc[2]}-${utc[3]}T${utc[4]}:${utc[5]}:${utc[6]}Z`);
+  const iso = line.match(/(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)/);
+  if (iso) return new Date(iso[1]);
+  const local = line.match(/(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})/);
+  if (local) return new Date(`${local[1]}-${local[2]}-${local[3]}T${local[4]}:${local[5]}:${local[6]}Z`);
+  return undefined;
+}
+
+function filterLog(text: string, window: ReportWindow): string {
+  let active: Date | undefined;
+  return text.split(/\r?\n/).filter((line) => {
+    const timestamp = timestampInLine(line);
+    if (timestamp) active = timestamp;
+    return Boolean(active && inWindow(active, window));
+  }).join("\n").trim();
+}
+
+async function collectBackups(config: Config, window: ReportWindow): Promise<BackupCheck[]> {
+  return Promise.all(BACKUP_SOURCES.map(async ({ project, provider, log }) => {
+    try {
+      const content = await readFile(log, "utf8");
+      const lines = content.split(/\r?\n/);
+      const runs = lines.map((line) => ({ line, timestamp: timestampInLine(line) }))
+        .filter((run): run is { line: string; timestamp: Date } => Boolean(run.timestamp && inWindow(run.timestamp, window)));
+      const failures = runs.filter(({ line }) => /failed|failure|error|could not|no se pudo/i.test(line));
+      const successes = runs.filter(({ line }) => /backup created|backup SQL creado|^OK:/i.test(line));
+      const latest = [...successes].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())[0];
+      const status = failures.length ? "FALLO" : latest ? "OK" : "SIN EVIDENCIA";
+      return { project, provider, status, observedAt: latest?.timestamp.toISOString(), detail: failures.length ? failures.at(-1)!.line : latest?.line ?? `No hay ejecuciones en ${formatWindow(window)}.` };
+    } catch (error) {
+      return { project, provider, status: "SIN EVIDENCIA", detail: `No se pudo leer el log de backup: ${String(error)}` };
+    }
+  }));
+}
+
 export async function collectEvidence(config: Config): Promise<Evidence> {
+  const window = reportWindow(new Date(), config.timezone);
   const jobs: ScheduledJob[] = [];
   const sources: Evidence["sources"] = [];
   const warnings: string[] = [];
@@ -74,8 +119,8 @@ export async function collectEvidence(config: Config): Promise<Evidence> {
     }
   }
 
-  const journal = await commandText("journalctl", ["--since", "24 hours ago", "--no-pager", "-n", "500"]);
-  logs.push({ source: "journalctl últimas 24 horas", ...limitText(journal.text, config.logMaxBytes) });
+  const journal = await commandText("journalctl", ["--since", window.start.toISOString(), "--until", window.end.toISOString(), "--no-pager", "-n", "500"]);
+  logs.push({ source: `journalctl ${formatWindow(window)}`, ...limitText(journal.text, config.logMaxBytes) });
   if (!journal.ok) warnings.push("No se pudo leer journalctl.");
 
   const paths = new Set<string>();
@@ -85,9 +130,10 @@ export async function collectEvidence(config: Config): Promise<Evidence> {
   for (const file of paths) {
     try {
       const stat = await readFile(file, "utf8");
-      context.push({ path: file, ...limitText(stat, config.logMaxBytes) });
+      const content = /\/var\/log\/|\.log$/.test(file) ? filterLog(stat, window) : stat;
+      context.push({ path: file, ...limitText(content, config.logMaxBytes) });
     } catch { warnings.push(`No se pudo leer contexto relacionado: ${file}`); }
   }
   const externalJobs = jobs.filter((job) => !job.command.includes(config.projectRoot));
-  return { collectedAt: new Date().toISOString(), timezone: config.timezone, jobs: externalJobs, sources, logs, context, warnings };
+  return { collectedAt: new Date().toISOString(), timezone: config.timezone, window: { start: window.start.toISOString(), end: window.end.toISOString() }, jobs: externalJobs, sources, logs, context, backups: await collectBackups(config, window), warnings };
 }
