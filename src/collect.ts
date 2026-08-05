@@ -43,7 +43,8 @@ async function commandText(command: string, args: string[]): Promise<{ ok: boole
 const BACKUP_SOURCES = [
   { project: "Jucart", provider: "Supabase", log: "/home/rafa/dev/jucart/var/log/supabase-backup.cron.log" },
   { project: "Irati", provider: "Supabase", log: "/home/rafa/dev/irati-app/var/log/supabase-backup.cron.log" },
-  { project: "encuesta-simple", provider: "Neon", log: "/home/rafa/dev/encuesta-simple/var/log/neon-backup.log" }
+  { project: "encuesta-simple", provider: "Neon", log: "/home/rafa/dev/encuesta-simple/var/log/neon-backup.log" },
+  { project: "Kamikazes", provider: "Neon", log: "/home/rafa/dev/kamikazes-app/var/log/neon-backup.log" }
 ] as const;
 
 function timestampInLine(line: string): Date | undefined {

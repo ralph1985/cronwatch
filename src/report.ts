@@ -3,15 +3,16 @@ import type { Evidence } from "./types.js";
 export const INCLUDED_PROJECTS = [
   { key: "jucart", name: "Jucart", root: "/home/rafa/dev/jucart" },
   { key: "irati", name: "Irati", root: "/home/rafa/dev/irati-app" },
-  { key: "encuesta-simple", name: "encuesta-simple", root: "/home/rafa/dev/encuesta-simple" }
+  { key: "encuesta-simple", name: "encuesta-simple", root: "/home/rafa/dev/encuesta-simple" },
+  { key: "kamikazes", name: "Kamikazes", root: "/home/rafa/dev/kamikazes-app" }
 ] as const;
 
 export function buildPrompt(evidenceJson: string): string {
   return "Analiza en español el paquete de evidencias de CronWatch incluido entre las marcas EVIDENCE.\n\n" +
     "Solo puedes leer y analizar el contenido incluido. No ejecutes comandos ni modifiques archivos.\n" +
-    "Limita el análisis exclusivamente a estos proyectos y sus automatizaciones: Jucart, Irati y encuesta-simple. " +
+    "Limita el análisis exclusivamente a estos proyectos y sus automatizaciones: Jucart, Irati, encuesta-simple y Kamikazes. " +
     "Ignora avisos generales del sistema que no estén relacionados con esos proyectos.\n" +
-    "Genera texto usando exactamente estas secciones: RESUMEN GENERAL, Jucart, Irati y encuesta-simple. " +
+    "Genera texto usando exactamente estas secciones: RESUMEN GENERAL, Jucart, Irati, encuesta-simple y Kamikazes. " +
     "En cada proyecto incluye Estado (OK, AVISOS o FALLO), Tareas correctas, Fallos y avisos y Recomendaciones. " +
     "Mantén los éxitos resumidos y describe completamente los fallos y avisos. Distingue evidencia observada e inferencias. " +
     "No inventes ejecuciones ni datos ausentes. Da prioridad a la tabla backups de la evidencia: su estado es determinista y debe aparecer reflejado en el resumen general. Respeta la ventana temporal indicada en evidence.window y no uses logs fuera de ella.\n\n" +
@@ -67,7 +68,7 @@ function projectDetailsTable(section: string, status: "OK" | "AVISOS" | "FALLO",
 }
 
 export function buildHtmlReport(report: string, evidence: Evidence): string {
-  const general = sectionText(report, "RESUMEN GENERAL") || report.split(/^#+\s*(?:Jucart|Irati|encuesta-simple)\s*$/im)[0].trim();
+  const general = sectionText(report, "RESUMEN GENERAL") || report.split(/^#+\s*(?:Jucart|Irati|encuesta-simple|Kamikazes)\s*$/im)[0].trim();
   const cards = INCLUDED_PROJECTS.map((project) => {
     const section = sectionText(report, project.name);
     const status = statusFor(section, evidence, project.root);
