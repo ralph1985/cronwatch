@@ -43,6 +43,29 @@ function renderText(text: string): string {
   return escapeHtml(text).replace(/^[-*] (.+)$/gm, "<li>$1</li>").replace(/(<li>.*<\/li>\n?)+/g, (items) => `<ul>${items}</ul>`).replace(/\n{2,}/g, "<br><br>").replace(/\n/g, "<br>");
 }
 
+const PROJECT_FIELDS = [
+  { label: "Tareas correctas", pattern: "Tareas correctas" },
+  { label: "Fallos y avisos", pattern: "Fallos y avisos" },
+  { label: "Recomendaciones", pattern: "Recomendaciones" }
+] as const;
+
+function fieldText(section: string, pattern: string): string {
+  const labels = ["Estado(?:\\s*\\([^\\n]*\\))?", ...PROJECT_FIELDS.map((field) => field.pattern)]
+    .filter((candidate) => candidate !== pattern).join("|");
+  const match = section.match(new RegExp(`(?:^|\\n)\\s*${pattern}\\s*:\\s*([\\s\\S]*?)(?=\\n\\s*(?:${labels})\\s*:|$)`, "i"));
+  return match?.[1]?.trim() || "—";
+}
+
+function projectDetailsTable(section: string, status: "OK" | "AVISOS" | "FALLO", jobs: number): string {
+  const color = status === "OK" ? "#15803d" : status === "FALLO" ? "#b91c1c" : "#b45309";
+  const rows = [
+    `<tr><th>Estado</th><td><span class="status" style="color:${color};border-color:${color}">${status}</span></td></tr>`,
+    `<tr><th>Automatizaciones detectadas</th><td>${jobs}</td></tr>`,
+    ...PROJECT_FIELDS.map((field) => `<tr><th>${field.label}</th><td>${renderText(fieldText(section, field.pattern))}</td></tr>`)
+  ].join("");
+  return `<div class="table-wrap"><table class="project-table"><tbody>${rows}</tbody></table></div>`;
+}
+
 export function buildHtmlReport(report: string, evidence: Evidence): string {
   const general = sectionText(report, "RESUMEN GENERAL") || report.split(/^#+\s*(?:Jucart|Irati|encuesta-simple)\s*$/im)[0].trim();
   const cards = INCLUDED_PROJECTS.map((project) => {
@@ -51,7 +74,7 @@ export function buildHtmlReport(report: string, evidence: Evidence): string {
     const jobs = evidence.jobs.filter((job) => job.command.includes(project.root)).length;
     const color = status === "OK" ? "#15803d" : status === "FALLO" ? "#b91c1c" : "#b45309";
     const content = section || `No hay análisis específico disponible para ${project.name}. Tareas detectadas: ${jobs}.`;
-    return `<section class="card"><div class="card-head"><h2>${escapeHtml(project.name)}</h2><span class="status" style="color:${color};border-color:${color}">${status}</span></div><p class="meta">${jobs} automatización${jobs === 1 ? "" : "es"} detectada${jobs === 1 ? "" : "s"}</p><div>${renderText(content)}</div></section>`;
+    return `<section class="card"><div class="card-head"><h2>${escapeHtml(project.name)}</h2></div>${projectDetailsTable(content, status, jobs)}</section>`;
   }).join("\n");
   const overall = INCLUDED_PROJECTS.map((project) => statusFor(sectionText(report, project.name), evidence, project.root));
   const overallStatus = overall.includes("FALLO") ? "FALLO" : overall.includes("AVISOS") ? "AVISOS" : "OK";
@@ -64,7 +87,7 @@ export function buildHtmlReport(report: string, evidence: Evidence): string {
   const windowLabel = new Intl.DateTimeFormat("es-ES", { timeZone: evidence.timezone, dateStyle: "short", timeStyle: "short" });
   const windowText = `${windowLabel.format(new Date(evidence.window.start))} → ${windowLabel.format(new Date(evidence.window.end))}`;
   const backupTable = `<section class="card backup-card"><h2 style="margin-top:0">Copias de seguridad nocturnas</h2><p class="meta">Ventana analizada: ${windowText}</p><div class="table-wrap"><table><thead><tr><th>Proyecto</th><th>Servicio</th><th>Estado</th><th>Última correcta</th><th>Evidencia</th></tr></thead><tbody>${backupRows || `<tr><td colspan="5">No hay datos de copias.</td></tr>`}</tbody></table></div></section>`;
-  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>CronWatch</title></head><body style="margin:0;background:#f3f4f6;color:#172033;font-family:Arial,Helvetica,sans-serif"><main style="max-width:900px;margin:0 auto;padding:24px 14px"><header style="background:#172033;color:#fff;border-radius:18px;padding:24px;margin-bottom:16px"><p style="margin:0 0 8px;color:#b8c7e6;font-size:12px;letter-spacing:.12em;text-transform:uppercase">CronWatch</p><h1 style="margin:0 0 14px;font-size:26px">Informe diario de automatizaciones</h1><span class="status" style="color:${overallColor};border-color:${overallColor};background:#fff">${overallStatus}</span></header>${backupTable}<section class="card" style="background:#fff;border-radius:16px;padding:20px;margin-bottom:14px;box-shadow:0 2px 10px #17203312"><h2 style="margin-top:0">Resumen general</h2><div>${renderText(general)}</div></section>${cards}<footer style="color:#667085;font-size:12px;padding:12px 4px">Informe generado por CronWatch. Las conclusiones distinguen entre evidencia observada e inferencias.</footer></main><style>.card{background:#fff;border-radius:16px;padding:20px;margin-bottom:14px;box-shadow:0 2px 10px #17203312}.card-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.card h2{margin:0 0 8px;font-size:20px}.status{display:inline-block;border:1px solid;border-radius:999px;padding:5px 10px;font-size:12px;font-weight:700;background:#fff}.meta{margin:0 0 16px;color:#667085;font-size:13px}ul{padding-left:20px}li{margin:5px 0}.table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;vertical-align:top;padding:10px 8px;border-bottom:1px solid #e5e7eb}th{color:#667085;font-size:11px;text-transform:uppercase;letter-spacing:.04em}</style></body></html>`;
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>CronWatch</title></head><body style="margin:0;background:#f3f4f6;color:#172033;font-family:Arial,Helvetica,sans-serif"><main style="max-width:900px;margin:0 auto;padding:24px 14px"><header style="background:#172033;color:#fff;border-radius:18px;padding:24px;margin-bottom:16px"><p style="margin:0 0 8px;color:#b8c7e6;font-size:12px;letter-spacing:.12em;text-transform:uppercase">CronWatch</p><h1 style="margin:0 0 14px;font-size:26px">Informe diario de automatizaciones</h1><span class="status" style="color:${overallColor};border-color:${overallColor};background:#fff">${overallStatus}</span></header>${backupTable}<section class="card" style="background:#fff;border-radius:16px;padding:20px;margin-bottom:14px;box-shadow:0 2px 10px #17203312"><h2 style="margin-top:0">Resumen general</h2><div>${renderText(general)}</div></section>${cards}<footer style="color:#667085;font-size:12px;padding:12px 4px">Informe generado por CronWatch. Las conclusiones distinguen entre evidencia observada e inferencias.</footer></main><style>.card{background:#fff;border-radius:16px;padding:20px;margin-bottom:14px;box-shadow:0 2px 10px #17203312}.card-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.card h2{margin:0 0 8px;font-size:20px}.status{display:inline-block;border:1px solid;border-radius:999px;padding:5px 10px;font-size:12px;font-weight:700;background:#fff}.meta{margin:0 0 16px;color:#667085;font-size:13px}ul{padding-left:20px}li{margin:5px 0}.table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;vertical-align:top;padding:10px 8px;border-bottom:1px solid #e5e7eb}th{color:#667085;font-size:11px;text-transform:uppercase;letter-spacing:.04em}.project-table th{width:30%;white-space:nowrap}.project-table td{font-size:14px}</style></body></html>`;
 }
 
 export function fallbackReport(evidence: Evidence, error?: string): string {
