@@ -44,7 +44,8 @@ const BACKUP_SOURCES = [
   { project: "Jucart", provider: "Supabase", log: "/home/rafa/dev/jucart/var/log/supabase-backup.cron.log" },
   { project: "Irati", provider: "Supabase", log: "/home/rafa/dev/irati-app/var/log/supabase-backup.cron.log" },
   { project: "encuesta-simple", provider: "Neon", log: "/home/rafa/dev/encuesta-simple/var/log/neon-backup.log" },
-  { project: "Kamikazes", provider: "Neon", log: "/home/rafa/dev/kamikazes-app/var/log/neon-backup.log" }
+  { project: "Kamikazes", provider: "Neon", log: "/home/rafa/dev/kamikazes-app/var/log/neon-backup.log" },
+  { project: "loto-sync", provider: "Vercel Postgres", log: "/home/rafa/dev/loto-sync/backups/backup-cron.log" }
 ] as const;
 
 function timestampInLine(line: string): Date | undefined {
@@ -74,7 +75,7 @@ async function collectBackups(config: Config, window: ReportWindow): Promise<Bac
       const runs = lines.map((line) => ({ line, timestamp: timestampInLine(line) }))
         .filter((run): run is { line: string; timestamp: Date } => Boolean(run.timestamp && inWindow(run.timestamp, window)));
       const failures = runs.filter(({ line }) => /failed|failure|error|could not|no se pudo/i.test(line));
-      const successes = runs.filter(({ line }) => /backup created|backup SQL creado|^OK:/i.test(line));
+      const successes = runs.filter(({ line }) => /backup created|backup SQL creado|^Local backup ready:|^OK:/i.test(line));
       const latest = [...successes].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())[0];
       const status = failures.length ? "FALLO" : latest ? "OK" : "SIN EVIDENCIA";
       return { project, provider, status, observedAt: latest?.timestamp.toISOString(), detail: failures.length ? failures.at(-1)!.line : latest?.line ?? `No hay ejecuciones en ${formatWindow(window)}.` };

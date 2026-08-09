@@ -23,7 +23,7 @@ pnpm run install:cron
 
 `install:cron` modifica el crontab del usuario únicamente cuando se ejecuta explícitamente. La tarea se instala por defecto a las 08:00 en `Europe/Madrid`. Si Resend falla, el informe queda en `var/pending/` y se reenvía en la siguiente ejecución correcta.
 
-Cada informe diario analiza la ventana `[día anterior 08:00, día actual 08:00)` en la zona horaria configurada. El correo comienza con una tabla de copias de seguridad de Jucart, Irati, encuesta-simple y Kamikazes; sus estados se calculan a partir de los logs de backup incluidos en esa ventana (`OK`, `FALLO` o `SIN EVIDENCIA`).
+Cada informe diario analiza la ventana `[día anterior 08:00, día actual 08:00)` en la zona horaria configurada. El correo comienza con una tabla de copias de seguridad de Jucart, Irati, encuesta-simple, Kamikazes y loto-sync; sus estados se calculan a partir de los logs de backup incluidos en esa ventana (`OK`, `FALLO` o `SIN EVIDENCIA`).
 
 ## Seguridad y límites
 
