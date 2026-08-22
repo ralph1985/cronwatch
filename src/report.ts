@@ -5,15 +5,16 @@ export const INCLUDED_PROJECTS = [
   { key: "irati", name: "Irati", root: "/home/rafa/dev/irati-app" },
   { key: "encuesta-simple", name: "encuesta-simple", root: "/home/rafa/dev/encuesta-simple" },
   { key: "kamikazes", name: "Kamikazes", root: "/home/rafa/dev/kamikazes-app" },
-  { key: "loto-sync", name: "loto-sync", root: "/home/rafa/dev/loto-sync" }
+  { key: "loto-sync", name: "loto-sync", root: "/home/rafa/dev/loto-sync" },
+  { key: "ofertas-radar", name: "Ofertas Radar", root: "/home/rafa/dev/ofertas-radar" }
 ] as const;
 
 export function buildPrompt(evidenceJson: string): string {
   return "Analiza en español el paquete de evidencias de CronWatch incluido entre las marcas EVIDENCE.\n\n" +
     "Solo puedes leer y analizar el contenido incluido. No ejecutes comandos ni modifiques archivos.\n" +
-    "Limita el análisis exclusivamente a estos proyectos y sus automatizaciones: Jucart, Irati, encuesta-simple, Kamikazes y loto-sync. " +
+    "Limita el análisis exclusivamente a estos proyectos y sus automatizaciones: Jucart, Irati, encuesta-simple, Kamikazes, loto-sync y Ofertas Radar. " +
     "Ignora avisos generales del sistema que no estén relacionados con esos proyectos.\n" +
-    "Genera texto usando exactamente estas secciones: RESUMEN GENERAL, Jucart, Irati, encuesta-simple, Kamikazes y loto-sync. " +
+    "Genera texto usando exactamente estas secciones: RESUMEN GENERAL, Jucart, Irati, encuesta-simple, Kamikazes, loto-sync y Ofertas Radar. " +
     "En cada proyecto incluye Estado (OK, AVISOS o FALLO), Tareas correctas, Fallos y avisos y Recomendaciones. " +
     "Mantén los éxitos resumidos y describe completamente los fallos y avisos. Distingue evidencia observada e inferencias. " +
     "No inventes ejecuciones ni datos ausentes. Da prioridad a la tabla backups de la evidencia: su estado es determinista y debe aparecer reflejado en el resumen general. Respeta la ventana temporal indicada en evidence.window y no uses logs fuera de ella.\n\n" +
