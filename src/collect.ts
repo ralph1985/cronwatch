@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { readdir, readFile } from "node:fs/promises";
+import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import type { Config } from "./config.js";
 import { limitText } from "./redaction.js";
@@ -86,6 +86,26 @@ async function collectBackups(config: Config, window: ReportWindow): Promise<Bac
   }));
 }
 
+async function collectCrontabBackup(config: Config, window: ReportWindow): Promise<BackupCheck> {
+  const directory = path.join(config.varRoot, "backups", "crontab");
+  try {
+    const candidates = (await readdir(directory)).filter((name) => /^crontab-.*\.txt$/.test(name));
+    const files = await Promise.all(candidates.map(async (name) => {
+      const file = path.join(directory, name);
+      return { name, file, metadata: await stat(file) };
+    }));
+    const recent = files
+      .filter(({ metadata }) => inWindow(new Date(metadata.mtimeMs), window))
+      .sort((a, b) => b.metadata.mtimeMs - a.metadata.mtimeMs)[0];
+    if (!recent) {
+      return { project: "CronWatch", provider: "Copia del crontab", status: "AVISOS", detail: `No hay una copia diaria en ${formatWindow(window)}.` };
+    }
+    return { project: "CronWatch", provider: "Copia del crontab", status: "OK", observedAt: recent.metadata.mtime.toISOString(), detail: `Copia disponible: ${recent.name}` };
+  } catch (error) {
+    return { project: "CronWatch", provider: "Copia del crontab", status: "AVISOS", detail: `No se pudo leer el directorio de copias: ${String(error)}` };
+  }
+}
+
 export async function collectEvidence(config: Config): Promise<Evidence> {
   const window = reportWindow(new Date(), config.timezone);
   const jobs: ScheduledJob[] = [];
@@ -138,5 +158,5 @@ export async function collectEvidence(config: Config): Promise<Evidence> {
     } catch { warnings.push(`No se pudo leer contexto relacionado: ${file}`); }
   }
   const externalJobs = jobs.filter((job) => !job.command.includes(config.projectRoot));
-  return { collectedAt: new Date().toISOString(), timezone: config.timezone, window: { start: window.start.toISOString(), end: window.end.toISOString() }, jobs: externalJobs, sources, logs, context, backups: await collectBackups(config, window), warnings };
+  return { collectedAt: new Date().toISOString(), timezone: config.timezone, window: { start: window.start.toISOString(), end: window.end.toISOString() }, jobs: externalJobs, sources, logs, context, backups: [await collectCrontabBackup(config, window), ...(await collectBackups(config, window))], warnings };
 }

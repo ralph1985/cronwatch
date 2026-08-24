@@ -10,4 +10,6 @@ test("construye un bloque cron idempotente", () => {
   assert.equal(second, first);
   assert.match(first, /# BEGIN CRONWATCH/);
   assert.match(first, /0 8 \* \* \* cd '\/home\/rafa\/dev\/cronwatch'/);
+  assert.match(first, /# BEGIN CRONWATCH CRONTAB BACKUP/);
+  assert.match(first, /CRON_TZ=Europe\/Madrid\n0 1 \* \* \* .*backup-crontab\.sh/);
 });

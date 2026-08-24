@@ -17,7 +17,7 @@ export function buildPrompt(evidenceJson: string): string {
     "Genera texto usando exactamente estas secciones: RESUMEN GENERAL, Jucart, Irati, encuesta-simple, Kamikazes, loto-sync y Ofertas Radar. " +
     "En cada proyecto incluye Estado (OK, AVISOS o FALLO), Tareas correctas, Fallos y avisos y Recomendaciones. " +
     "Mantén los éxitos resumidos y describe completamente los fallos y avisos. Distingue evidencia observada e inferencias. " +
-    "No inventes ejecuciones ni datos ausentes. Da prioridad a la tabla backups de la evidencia: su estado es determinista y debe aparecer reflejado en el resumen general. Respeta la ventana temporal indicada en evidence.window y no uses logs fuera de ella.\n\n" +
+    "No inventes ejecuciones ni datos ausentes. Da prioridad a la tabla backups de la evidencia: su estado es determinista y debe aparecer reflejado en el resumen general. La fila CronWatch / Copia del crontab es una comprobación operativa y debe tratarse como AVISOS si falta, sin inventar una tarjeta de proyecto. Respeta la ventana temporal indicada en evidence.window y no uses logs fuera de ella.\n\n" +
     "--- BEGIN EVIDENCE ---\n" + evidenceJson + "\n--- END EVIDENCE ---";
 }
 
@@ -80,6 +80,9 @@ export function buildHtmlReport(report: string, evidence: Evidence): string {
     return `<section class="card"><div class="card-head"><h2>${escapeHtml(project.name)}</h2></div>${projectDetailsTable(content, status, jobs)}</section>`;
   }).join("\n");
   const overall = INCLUDED_PROJECTS.map((project) => statusFor(sectionText(report, project.name), evidence, project.root));
+  const crontabBackup = evidence.backups.find((backup) => backup.project === "CronWatch");
+  if (crontabBackup?.status === "AVISOS" || crontabBackup?.status === "SIN EVIDENCIA") overall.push("AVISOS");
+  if (crontabBackup?.status === "FALLO") overall.push("FALLO");
   const overallStatus = overall.includes("FALLO") ? "FALLO" : overall.includes("AVISOS") ? "AVISOS" : "OK";
   const overallColor = overallStatus === "OK" ? "#15803d" : overallStatus === "FALLO" ? "#b91c1c" : "#b45309";
   const backupRows = evidence.backups.map((backup) => {

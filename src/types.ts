@@ -25,7 +25,7 @@ export interface Evidence {
 export interface BackupCheck {
   project: string;
   provider: string;
-  status: "OK" | "FALLO" | "SIN EVIDENCIA";
+  status: "OK" | "FALLO" | "AVISOS" | "SIN EVIDENCIA";
   observedAt?: string;
   detail: string;
 }

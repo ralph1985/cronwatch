@@ -4,6 +4,7 @@ import { buildHtmlReport, buildPrompt, fallbackReport } from "../src/report.js";
 
 const window = { start: "2026-07-03T06:00:00.000Z", end: "2026-08-03T06:00:00.000Z" };
 const backups = [
+  { project: "CronWatch", provider: "Copia del crontab", status: "AVISOS" as const, detail: "No hay una copia diaria." },
   { project: "Jucart", provider: "Supabase", status: "OK" as const, observedAt: "2026-08-03T04:00:01Z", detail: "Backup created" }
 ];
 
@@ -37,6 +38,8 @@ test("genera informe HTML separado por proyectos", () => {
   assert.match(html, /AVISOS/);
   assert.match(html, /Copias de seguridad nocturnas/);
   assert.match(html, /Jucart.*Supabase.*OK/s);
+  assert.match(html, /CronWatch.*Copia del crontab.*AVISOS/s);
+  assert.match(html, /<span class="status"[^>]*>AVISOS<\/span>/);
   assert.match(html, /Tareas correctas/);
   assert.match(html, /Backup nocturno/);
 });
