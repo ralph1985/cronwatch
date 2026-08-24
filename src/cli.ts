@@ -1,9 +1,9 @@
 import path from "node:path";
 import { collectEvidence } from "./collect.js";
 import { loadConfig } from "./config.js";
-import { analyzeWithCodex, verifyCodex } from "./codex.js";
+import { verifyCodex } from "./codex.js";
 import { sendEmail } from "./email.js";
-import { buildHtmlReport, fallbackReport } from "./report.js";
+import { buildHtmlReport, buildTextReport } from "./report.js";
 import { ensureStorage, pruneStorage, readPending, readStored, removeStored, writeJson, writeReport } from "./storage.js";
 import { installCron } from "./cron.js";
 
@@ -34,14 +34,11 @@ function runStamp(config: Awaited<ReturnType<typeof loadConfig>>): string {
 async function run(): Promise<void> {
   const config = await loadConfig();
   await ensureStorage(config);
-  const stamp = dateStamp(config);
   const executionStamp = runStamp(config);
   const evidence = await retry(() => collectEvidence(config));
-  const evidencePath = await writeJson(config, "evidence", `${stamp}.json`, evidence);
-  let report: string;
-  try { report = await retry(() => analyzeWithCodex(config, evidencePath)); }
-  catch (error) { report = fallbackReport(evidence, String(error)); }
-  const html = buildHtmlReport(report, evidence);
+  await writeJson(config, "evidence", `${dateStamp(config)}.json`, evidence);
+  const report = buildTextReport(evidence);
+  const html = buildHtmlReport(evidence);
   const subject = `CronWatch — informe — ${executionStamp}`;
   const reportName = `${executionStamp}.txt`;
   await writeReport(config, reportName, report);

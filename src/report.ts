@@ -69,31 +69,31 @@ function projectDetailsTable(section: string, status: "OK" | "AVISOS" | "FALLO",
   return `<div class="table-wrap"><table class="project-table"><tbody>${rows}</tbody></table></div>`;
 }
 
-export function buildHtmlReport(report: string, evidence: Evidence): string {
-  const general = sectionText(report, "RESUMEN GENERAL") || report.split(/^#+\s*(?:Jucart|Irati|encuesta-simple|Kamikazes)\s*$/im)[0].trim();
-  const cards = INCLUDED_PROJECTS.map((project) => {
-    const section = sectionText(report, project.name);
-    const status = statusFor(section, evidence, project.root);
-    const jobs = evidence.jobs.filter((job) => job.command.includes(project.root)).length;
-    const color = status === "OK" ? "#15803d" : status === "FALLO" ? "#b91c1c" : "#b45309";
-    const content = section || `No hay análisis específico disponible para ${project.name}. Tareas detectadas: ${jobs}.`;
-    return `<section class="card"><div class="card-head"><h2>${escapeHtml(project.name)}</h2></div>${projectDetailsTable(content, status, jobs)}</section>`;
-  }).join("\n");
-  const overall = INCLUDED_PROJECTS.map((project) => statusFor(sectionText(report, project.name), evidence, project.root));
-  const crontabBackup = evidence.backups.find((backup) => backup.project === "CronWatch");
-  if (crontabBackup?.status === "AVISOS" || crontabBackup?.status === "SIN EVIDENCIA") overall.push("AVISOS");
-  if (crontabBackup?.status === "FALLO") overall.push("FALLO");
-  const overallStatus = overall.includes("FALLO") ? "FALLO" : overall.includes("AVISOS") ? "AVISOS" : "OK";
-  const overallColor = overallStatus === "OK" ? "#15803d" : overallStatus === "FALLO" ? "#b91c1c" : "#b45309";
+function backupRows(evidence: Evidence): string {
   const backupRows = evidence.backups.map((backup) => {
     const color = backup.status === "OK" ? "#15803d" : backup.status === "FALLO" ? "#b91c1c" : "#b45309";
     const observed = backup.observedAt ? new Intl.DateTimeFormat("es-ES", { timeZone: evidence.timezone, dateStyle: "short", timeStyle: "short" }).format(new Date(backup.observedAt)) : "—";
     return `<tr><td>${escapeHtml(backup.project)}</td><td>${escapeHtml(backup.provider)}</td><td><span class="status" style="color:${color};border-color:${color}">${backup.status}</span></td><td>${observed}</td><td>${escapeHtml(backup.detail)}</td></tr>`;
   }).join("");
+  return backupRows;
+}
+
+export function buildTextReport(evidence: Evidence): string {
   const windowLabel = new Intl.DateTimeFormat("es-ES", { timeZone: evidence.timezone, dateStyle: "short", timeStyle: "short" });
   const windowText = `${windowLabel.format(new Date(evidence.window.start))} → ${windowLabel.format(new Date(evidence.window.end))}`;
-  const backupTable = `<section class="card backup-card"><h2 style="margin-top:0">Copias de seguridad nocturnas</h2><p class="meta">Ventana analizada: ${windowText}</p><div class="table-wrap"><table><thead><tr><th>Proyecto</th><th>Servicio</th><th>Estado</th><th>Última correcta</th><th>Evidencia</th></tr></thead><tbody>${backupRows || `<tr><td colspan="5">No hay datos de copias.</td></tr>`}</tbody></table></div></section>`;
-  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>CronWatch</title></head><body style="margin:0;background:#f3f4f6;color:#172033;font-family:Arial,Helvetica,sans-serif"><main style="max-width:900px;margin:0 auto;padding:24px 14px"><header style="background:#172033;color:#fff;border-radius:18px;padding:24px;margin-bottom:16px"><p style="margin:0 0 8px;color:#b8c7e6;font-size:12px;letter-spacing:.12em;text-transform:uppercase">CronWatch</p><h1 style="margin:0 0 14px;font-size:26px">Informe diario de automatizaciones</h1><span class="status" style="color:${overallColor};border-color:${overallColor};background:#fff">${overallStatus}</span></header>${backupTable}<section class="card" style="background:#fff;border-radius:16px;padding:20px;margin-bottom:14px;box-shadow:0 2px 10px #17203312"><h2 style="margin-top:0">Resumen general</h2><div>${renderText(general)}</div></section>${cards}<footer style="color:#667085;font-size:12px;padding:12px 4px">Informe generado por CronWatch. Las conclusiones distinguen entre evidencia observada e inferencias.</footer></main><style>.card{background:#fff;border-radius:16px;padding:20px;margin-bottom:14px;box-shadow:0 2px 10px #17203312}.card-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.card h2{margin:0 0 8px;font-size:20px}.status{display:inline-block;border:1px solid;border-radius:999px;padding:5px 10px;font-size:12px;font-weight:700;background:#fff}.meta{margin:0 0 16px;color:#667085;font-size:13px}ul{padding-left:20px}li{margin:5px 0}.table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;vertical-align:top;padding:10px 8px;border-bottom:1px solid #e5e7eb}th{color:#667085;font-size:11px;text-transform:uppercase;letter-spacing:.04em}.project-table th{width:30%;white-space:nowrap}.project-table td{font-size:14px}</style></body></html>`;
+  const rows = evidence.backups.map((backup) => `- ${backup.project} | ${backup.provider} | ${backup.status} | ${backup.observedAt ? windowLabel.format(new Date(backup.observedAt)) : "—"} | ${backup.detail}`);
+  return ["CRONWATCH — COPIAS DE SEGURIDAD", `Ventana analizada: ${windowText}`, "", "Proyecto | Servicio | Estado | Última correcta | Evidencia", ...rows].join("\n");
+}
+
+export function buildHtmlReport(evidence: Evidence): string {
+  const overall = evidence.backups.map((backup) => backup.status);
+  const overallStatus = overall.includes("FALLO") ? "FALLO" : overall.includes("AVISOS") || overall.includes("SIN EVIDENCIA") ? "AVISOS" : "OK";
+  const overallColor = overallStatus === "OK" ? "#15803d" : overallStatus === "FALLO" ? "#b91c1c" : "#b45309";
+  const rows = backupRows(evidence);
+  const windowLabel = new Intl.DateTimeFormat("es-ES", { timeZone: evidence.timezone, dateStyle: "short", timeStyle: "short" });
+  const windowText = `${windowLabel.format(new Date(evidence.window.start))} → ${windowLabel.format(new Date(evidence.window.end))}`;
+  const backupTable = `<section class="card"><h2>Copias de seguridad nocturnas</h2><p class="meta">Ventana analizada: ${windowText}</p><div class="table-wrap"><table><thead><tr><th>Proyecto</th><th>Servicio</th><th>Estado</th><th>Última correcta</th><th>Evidencia</th></tr></thead><tbody>${rows || `<tr><td colspan="5">No hay datos de copias.</td></tr>`}</tbody></table></div></section>`;
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>CronWatch</title></head><body style="margin:0;background:#f3f4f6;color:#172033;font-family:Arial,Helvetica,sans-serif"><main style="max-width:900px;margin:0 auto;padding:24px 14px"><header style="background:#172033;color:#fff;border-radius:18px;padding:24px;margin-bottom:16px"><p style="margin:0 0 8px;color:#b8c7e6;font-size:12px;letter-spacing:.12em;text-transform:uppercase">CronWatch</p><h1 style="margin:0 0 14px;font-size:26px">Copias de seguridad nocturnas</h1><span class="status" style="color:${overallColor};border-color:${overallColor};background:#fff">${overallStatus}</span></header>${backupTable}<footer style="color:#667085;font-size:12px;padding:12px 4px">Informe generado por CronWatch.</footer></main><style>.card{background:#fff;border-radius:16px;padding:20px;margin-bottom:14px;box-shadow:0 2px 10px #17203312}.status{display:inline-block;border:1px solid;border-radius:999px;padding:5px 10px;font-size:12px;font-weight:700;background:#fff}.meta{margin:0 0 16px;color:#667085;font-size:13px}.table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;vertical-align:top;padding:10px 8px;border-bottom:1px solid #e5e7eb}th{color:#667085;font-size:11px;text-transform:uppercase;letter-spacing:.04em}</style></body></html>`;
 }
 
 export function fallbackReport(evidence: Evidence, error?: string): string {

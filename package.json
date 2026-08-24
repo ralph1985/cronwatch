@@ -2,7 +2,7 @@
   "name": "cronwatch",
   "version": "0.1.0",
   "private": true,
-  "description": "Informe diario de cron, timers systemd y sus logs con Codex y Resend.",
+  "description": "Informe diario de copias de seguridad de cron y timers systemd mediante Resend.",
   "type": "module",
   "packageManager": "pnpm@10.25.0",
   "scripts": {
