@@ -25,7 +25,7 @@ pnpm run install:cron
 
 La instalación también añade una tarea diaria a la 01:00 (`Europe/Madrid`) que guarda el crontab completo en `var/backups/crontab/`, con permisos privados y retención de 90 días. El informe marca esta copia como `OK` o `AVISOS`. Para restaurar una copia: `crontab var/backups/crontab/crontab-AAAA-MM-DD_HH-mm-ss.txt`.
 
-Cada informe diario analiza la ventana `[día anterior 08:00, día actual 08:00)` en la zona horaria configurada. El correo contiene únicamente una tabla de copias de seguridad de CronWatch, Jucart, Irati, encuesta-simple, Kamikazes, loto-sync y Ofertas Radar; el estado del crontab se calcula por la existencia de una copia en esa ventana y el resto a partir de sus logs (`OK`, `FALLO`, `AVISOS` o `SIN EVIDENCIA`).
+Cada informe diario analiza la ventana `[día anterior 08:00, día actual 08:00)` en la zona horaria configurada. El correo contiene únicamente una tabla de copias de seguridad de CronWatch, Jucart, Irati, encuesta-simple, Kamikazes, loto-sync, Ofertas Radar y A Punto; el estado del crontab se calcula por la existencia de una copia en esa ventana y el resto a partir de sus logs (`OK`, `FALLO`, `AVISOS` o `SIN EVIDENCIA`).
 
 ## Seguridad y límites
 

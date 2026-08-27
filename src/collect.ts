@@ -46,7 +46,8 @@ const BACKUP_SOURCES = [
   { project: "encuesta-simple", provider: "Neon", log: "/home/rafa/dev/encuesta-simple/var/log/neon-backup.log" },
   { project: "Kamikazes", provider: "Neon", log: "/home/rafa/dev/kamikazes-app/var/log/neon-backup.log" },
   { project: "loto-sync", provider: "Vercel Postgres", log: "/home/rafa/dev/loto-sync/backups/backup-cron.log" },
-  { project: "Ofertas Radar", provider: "Prisma Postgres", log: "/home/rafa/dev/ofertas-radar/var/log/prisma-postgres-backup.log" }
+  { project: "Ofertas Radar", provider: "Prisma Postgres", log: "/home/rafa/dev/ofertas-radar/var/log/prisma-postgres-backup.log" },
+  { project: "A Punto", provider: "PostgreSQL", log: "/home/rafa/dev/a-punto/var/log/postgres-backup.cron.log" }
 ] as const;
 
 function timestampInLine(line: string): Date | undefined {
