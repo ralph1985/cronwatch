@@ -47,13 +47,14 @@ const BACKUP_SOURCES = [
   { project: "Kamikazes", provider: "Neon", log: "/home/rafa/dev/kamikazes-app/var/log/neon-backup.log" },
   { project: "loto-sync", provider: "Vercel Postgres", log: "/home/rafa/dev/loto-sync/backups/backup-cron.log" },
   { project: "Ofertas Radar", provider: "Prisma Postgres", log: "/home/rafa/dev/ofertas-radar/var/log/prisma-postgres-backup.log" },
-  { project: "A Punto", provider: "PostgreSQL", log: "/home/rafa/dev/a-punto/var/log/postgres-backup.cron.log" }
+  { project: "A Punto", provider: "PostgreSQL", log: "/home/rafa/dev/a-punto/var/log/postgres-backup.cron.log" },
+  { project: "Google Drive", provider: "Copia externa", log: "/home/rafa/dev/backup-offsite/var/log/google-drive-backup.log" }
 ] as const;
 
-function timestampInLine(line: string): Date | undefined {
+export function timestampInLine(line: string): Date | undefined {
   const utc = line.match(/(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z/);
   if (utc) return new Date(`${utc[1]}-${utc[2]}-${utc[3]}T${utc[4]}:${utc[5]}:${utc[6]}Z`);
-  const iso = line.match(/(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)/);
+  const iso = line.match(/(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2}))/);
   if (iso) return new Date(iso[1]);
   const local = line.match(/(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})/);
   if (local) return new Date(`${local[1]}-${local[2]}-${local[3]}T${local[4]}:${local[5]}:${local[6]}Z`);
@@ -77,7 +78,7 @@ async function collectBackups(config: Config, window: ReportWindow): Promise<Bac
       const runs = lines.map((line) => ({ line, timestamp: timestampInLine(line) }))
         .filter((run): run is { line: string; timestamp: Date } => Boolean(run.timestamp && inWindow(run.timestamp, window)));
       const failures = runs.filter(({ line }) => /failed|failure|error|could not|no se pudo/i.test(line));
-      const successes = runs.filter(({ line }) => /backup created|backup SQL creado|^Local backup ready:|^OK:/i.test(line));
+      const successes = runs.filter(({ line }) => /backup created|backup SQL creado|^Local backup ready:|^OK:|Copia y comprobación finalizadas correctamente/i.test(line));
       const latest = [...successes].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())[0];
       const status = failures.length ? "FALLO" : latest ? "OK" : "SIN EVIDENCIA";
       return { project, provider, status, observedAt: latest?.timestamp.toISOString(), detail: failures.length ? failures.at(-1)!.line : latest?.line ?? `No hay ejecuciones en ${formatWindow(window)}.` };

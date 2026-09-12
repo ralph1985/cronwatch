@@ -13,7 +13,8 @@ const evidence = {
   context: [],
   backups: [
   { project: "CronWatch", provider: "Copia del crontab", status: "AVISOS" as const, detail: "No hay una copia diaria." },
-  { project: "Jucart", provider: "Supabase", status: "OK" as const, observedAt: "2026-08-03T04:00:01Z", detail: "Backup created" }
+  { project: "Jucart", provider: "Supabase", status: "OK" as const, observedAt: "2026-08-03T04:00:01Z", detail: "Backup created" },
+  { project: "Google Drive", provider: "Copia externa", status: "OK" as const, observedAt: "2026-08-03T07:30:00Z", detail: "Copia y comprobación finalizadas correctamente" }
   ],
   warnings: []
 };
@@ -23,6 +24,7 @@ test("genera texto solo con la tabla de copias", () => {
   assert.match(report, /COPIAS DE SEGURIDAD/);
   assert.match(report, /CronWatch \| Copia del crontab \| AVISOS/);
   assert.match(report, /Jucart \| Supabase \| OK/);
+  assert.match(report, /Google Drive \| Copia externa \| OK/);
   assert.doesNotMatch(report, /Tareas detectadas|Recomendaciones|Codex/);
 });
 
@@ -30,6 +32,7 @@ test("genera HTML solo con la tabla de copias", () => {
   const html = buildHtmlReport(evidence);
   assert.match(html, /Copias de seguridad nocturnas/);
   assert.match(html, /Jucart.*Supabase.*OK/s);
+  assert.match(html, /Google Drive.*Copia externa.*OK/s);
   assert.match(html, /CronWatch.*Copia del crontab.*AVISOS/s);
   assert.match(html, /<span class="status"[^>]*>AVISOS<\/span>/);
   assert.doesNotMatch(html, /Resumen general|Tareas correctas|Recomendaciones|Informe diario de automatizaciones/);
