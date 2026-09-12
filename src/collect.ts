@@ -48,6 +48,7 @@ const BACKUP_SOURCES = [
   { project: "loto-sync", provider: "Vercel Postgres", log: "/home/rafa/dev/loto-sync/backups/backup-cron.log" },
   { project: "Ofertas Radar", provider: "Prisma Postgres", log: "/home/rafa/dev/ofertas-radar/var/log/prisma-postgres-backup.log" },
   { project: "A Punto", provider: "PostgreSQL", log: "/home/rafa/dev/a-punto/var/log/postgres-backup.cron.log" },
+  { project: "Obsidian", provider: "Copia local", log: "/home/rafa/dev/backup-offsite/var/log/obsidian-backup.log" },
   { project: "Google Drive", provider: "Copia externa", log: "/home/rafa/dev/backup-offsite/var/log/google-drive-backup.log" }
 ] as const;
 
@@ -70,18 +71,22 @@ function filterLog(text: string, window: ReportWindow): string {
   }).join("\n").trim();
 }
 
+export function backupCheckFromLog(content: string, project: string, provider: string, window: ReportWindow): BackupCheck {
+  const lines = content.split(/\r?\n/);
+  const runs = lines.map((line) => ({ line, timestamp: timestampInLine(line) }))
+    .filter((run): run is { line: string; timestamp: Date } => Boolean(run.timestamp && inWindow(run.timestamp, window)));
+  const failures = runs.filter(({ line }) => /failed|failure|error|could not|no se pudo/i.test(line));
+  const successes = runs.filter(({ line }) => /backup created|backup SQL creado|^Local backup ready:|^OK:|Copia y comprobación finalizadas correctamente/i.test(line));
+  const latest = [...successes].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())[0];
+  const status = failures.length ? "FALLO" : latest ? "OK" : "SIN EVIDENCIA";
+  return { project, provider, status, observedAt: latest?.timestamp.toISOString(), detail: failures.length ? failures.at(-1)!.line : latest?.line ?? `No hay ejecuciones en ${formatWindow(window)}.` };
+}
+
 async function collectBackups(config: Config, window: ReportWindow): Promise<BackupCheck[]> {
   return Promise.all(BACKUP_SOURCES.map(async ({ project, provider, log }) => {
     try {
       const content = await readFile(log, "utf8");
-      const lines = content.split(/\r?\n/);
-      const runs = lines.map((line) => ({ line, timestamp: timestampInLine(line) }))
-        .filter((run): run is { line: string; timestamp: Date } => Boolean(run.timestamp && inWindow(run.timestamp, window)));
-      const failures = runs.filter(({ line }) => /failed|failure|error|could not|no se pudo/i.test(line));
-      const successes = runs.filter(({ line }) => /backup created|backup SQL creado|^Local backup ready:|^OK:|Copia y comprobación finalizadas correctamente/i.test(line));
-      const latest = [...successes].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())[0];
-      const status = failures.length ? "FALLO" : latest ? "OK" : "SIN EVIDENCIA";
-      return { project, provider, status, observedAt: latest?.timestamp.toISOString(), detail: failures.length ? failures.at(-1)!.line : latest?.line ?? `No hay ejecuciones en ${formatWindow(window)}.` };
+      return backupCheckFromLog(content, project, provider, window);
     } catch (error) {
       return { project, provider, status: "SIN EVIDENCIA", detail: `No se pudo leer el log de backup: ${String(error)}` };
     }
