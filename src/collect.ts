@@ -75,11 +75,26 @@ export function backupCheckFromLog(content: string, project: string, provider: s
   const lines = content.split(/\r?\n/);
   const runs = lines.map((line) => ({ line, timestamp: timestampInLine(line) }))
     .filter((run): run is { line: string; timestamp: Date } => Boolean(run.timestamp && inWindow(run.timestamp, window)));
-  const failures = runs.filter(({ line }) => /failed|failure|error|could not|no se pudo/i.test(line));
-  const successes = runs.filter(({ line }) => /backup created|backup SQL creado|^Local backup ready:|^OK:|Copia y comprobación finalizadas correctamente/i.test(line));
-  const latest = [...successes].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())[0];
-  const status = failures.length ? "FALLO" : latest ? "OK" : "SIN EVIDENCIA";
-  return { project, provider, status, observedAt: latest?.timestamp.toISOString(), detail: failures.length ? failures.at(-1)!.line : latest?.line ?? `No hay ejecuciones en ${formatWindow(window)}.` };
+  type BackupEvent = { line: string; timestamp: Date; kind: "success" | "failure"; index: number };
+  const events: BackupEvent[] = [];
+  runs.forEach((run, index) => {
+    if (/failed|failure|error|could not|no se pudo/i.test(run.line)) {
+      events.push({ ...run, kind: "failure", index });
+    } else if (/backup created|backup SQL creado|^Local backup ready:|^OK:|Copia y comprobación finalizadas correctamente/i.test(run.line)) {
+      events.push({ ...run, kind: "success", index });
+    }
+  });
+  events.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime() || a.index - b.index);
+  const latestSuccess = [...events].reverse().find((event) => event.kind === "success");
+  const latestEvent = events.at(-1);
+  const status = latestEvent?.kind === "failure" ? "FALLO" : latestEvent ? "OK" : "SIN EVIDENCIA";
+  return {
+    project,
+    provider,
+    status,
+    observedAt: latestSuccess?.timestamp.toISOString(),
+    detail: latestEvent?.line ?? `No hay ejecuciones en ${formatWindow(window)}.`,
+  };
 }
 
 async function collectBackups(config: Config, window: ReportWindow): Promise<BackupCheck[]> {

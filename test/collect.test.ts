@@ -36,6 +36,19 @@ test("marca como fallo un error posterior del backup", () => {
   assert.equal(result.status, "FALLO");
 });
 
+test("marca como correcto un backup posterior al fallo", () => {
+  const result = backupCheckFromLog(
+    "[2026-09-12T00:30:01+02:00] ERROR: no se pudo resolver el host\n[2026-09-12T00:31:01+02:00] Backup created: obsidian-varememorycloud.tar.gz",
+    "Obsidian",
+    "Copia local",
+    window,
+  );
+
+  assert.equal(result.status, "OK");
+  assert.match(result.detail, /Backup created/);
+  assert.equal(result.observedAt, "2026-09-11T22:31:01.000Z");
+});
+
 test("marca sin evidencia un log sin ejecuciones en la ventana", () => {
   const result = backupCheckFromLog(
     "[2026-09-10T00:30:01+02:00] Backup created: antiguo.tar.gz",
