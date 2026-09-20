@@ -48,10 +48,12 @@ async function run(): Promise<void> {
   }
   try {
     for (const pending of await readPending(config)) {
-      await retry(async () => sendEmail(config.resendApiKey!, config.resendFrom!, config.reportTo, `CronWatch — informe pendiente — ${pending.replace(".txt", "")}`, await readStored(config, "pending", pending)));
+      const emailId = await retry(async () => sendEmail(config.resendApiKey!, config.resendFrom!, config.reportTo, `CronWatch — informe pendiente — ${pending.replace(".txt", "")}`, await readStored(config, "pending", pending)));
+      console.log(`Resend aceptó el informe: ${emailId}`);
       await removeStored(config, "pending", pending);
     }
-    await retry(() => sendEmail(config.resendApiKey!, config.resendFrom!, config.reportTo, subject, report, html));
+    const emailId = await retry(() => sendEmail(config.resendApiKey!, config.resendFrom!, config.reportTo, subject, report, html));
+    console.log(`Resend aceptó el informe: ${emailId}`);
   } catch (error) {
     await writeReport(config, reportName, `${report}\n\n[Correo pendiente por fallo de Resend: ${String(error)}]`, true);
     throw error;

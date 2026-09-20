@@ -59,3 +59,37 @@ test("marca sin evidencia un log sin ejecuciones en la ventana", () => {
 
   assert.equal(result.status, "SIN EVIDENCIA");
 });
+
+test("reconoce el backup PostgreSQL de Mis Facturas como correcto", () => {
+  const result = backupCheckFromLog(
+    "[2026-09-20T01:30:01+02:00] OK: backup SQL creado en /home/rafa/dev/mis-facturas/var/backups/postgres/mis-facturas-20260919T233001Z.dump",
+    "Mis Facturas",
+    "PostgreSQL",
+    {
+      start: new Date("2026-09-19T22:00:00Z"),
+      end: new Date("2026-09-20T22:00:00Z"),
+      timezone: "Europe/Madrid",
+    },
+  );
+
+  assert.equal(result.status, "OK");
+  assert.equal(result.project, "Mis Facturas");
+  assert.equal(result.provider, "PostgreSQL");
+});
+
+test("marca como fallo un ERROR posterior del backup PostgreSQL de Mis Facturas", () => {
+  const result = backupCheckFromLog(
+    "[2026-09-20T01:30:01+02:00] OK: backup SQL creado en /home/rafa/dev/mis-facturas/var/backups/postgres/mis-facturas-20260919T233001Z.dump\n[2026-09-20T01:31:01+02:00] ERROR: no se pudo crear el backup SQL",
+    "Mis Facturas",
+    "PostgreSQL",
+    {
+      start: new Date("2026-09-19T22:00:00Z"),
+      end: new Date("2026-09-20T22:00:00Z"),
+      timezone: "Europe/Madrid",
+    },
+  );
+
+  assert.equal(result.status, "FALLO");
+  assert.equal(result.project, "Mis Facturas");
+  assert.equal(result.provider, "PostgreSQL");
+});

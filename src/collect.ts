@@ -48,6 +48,7 @@ const BACKUP_SOURCES = [
   { project: "loto-sync", provider: "Vercel Postgres", log: "/home/rafa/dev/loto-sync/backups/backup-cron.log" },
   { project: "Ofertas Radar", provider: "Prisma Postgres", log: "/home/rafa/dev/ofertas-radar/var/log/prisma-postgres-backup.log" },
   { project: "A Punto", provider: "PostgreSQL", log: "/home/rafa/dev/a-punto/var/log/postgres-backup.cron.log" },
+  { project: "Mis Facturas", provider: "PostgreSQL", log: "/home/rafa/dev/mis-facturas/var/log/postgres-backup.cron.log" },
   { project: "Obsidian", provider: "Copia local", log: "/home/rafa/dev/backup-offsite/var/log/obsidian-backup.log" },
   { project: "Google Drive", provider: "Copia externa", log: "/home/rafa/dev/backup-offsite/var/log/google-drive-backup.log" }
 ] as const;
