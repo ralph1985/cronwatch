@@ -94,6 +94,13 @@ function scheduleNotice(window: ReportWindow, schedule?: BackupSchedule): string
   return ` La tarea no se ejecuta a diario: está programada ${schedule.description} (${schedule.timezone}). Próxima copia prevista: ${formatDateTime(next, schedule.timezone)}.`;
 }
 
+function unreadableLogDetail(error: unknown, window: ReportWindow, schedule?: BackupSchedule): string {
+  if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+    return `No existe todavía el log de backup; no hay una ejecución registrada.${scheduleNotice(window, schedule)}`;
+  }
+  return `No se pudo leer el log de backup: ${String(error)}.${scheduleNotice(window, schedule)}`;
+}
+
 function filterLog(text: string, window: ReportWindow): string {
   let active: Date | undefined;
   return text.split(/\r?\n/).filter((line) => {
@@ -145,7 +152,7 @@ async function collectBackups(config: Config, window: ReportWindow): Promise<Bac
       const content = await readFile(log, "utf8");
       return backupCheckFromLog(content, project, provider, window, schedule, metadata && new Date(metadata.mtimeMs));
     } catch (error) {
-      return { project, provider, status: "SIN EVIDENCIA", detail: `No se pudo leer el log de backup: ${String(error)}.${scheduleNotice(window, schedule)}` };
+      return { project, provider, status: "SIN EVIDENCIA", detail: unreadableLogDetail(error, window, schedule) };
     }
   }));
 }
