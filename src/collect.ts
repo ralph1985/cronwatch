@@ -5,7 +5,7 @@ import path from "node:path";
 import type { Config } from "./config.js";
 import { limitText } from "./redaction.js";
 import type { BackupCheck, Evidence, ScheduledJob, JobSource } from "./types.js";
-import { formatWindow, inWindow, reportWindow, type ReportWindow } from "./time-window.js";
+import { formatDateTime, formatWindow, inWindow, nextScheduledRun, reportWindow, type ReportWindow, type WeeklySchedule } from "./time-window.js";
 
 const exec = promisify(execFile);
 const CRON_RE = /^(\S+\s+\S+\s+\S+\s+\S+\s+\S+)\s+(.+)$/;
@@ -40,17 +40,42 @@ async function commandText(command: string, args: string[]): Promise<{ ok: boole
   }
 }
 
-const BACKUP_SOURCES = [
+export type BackupSchedule = WeeklySchedule & {
+  description: string;
+  timezone: string;
+};
+
+type BackupSource = {
+  project: string;
+  provider: string;
+  log: string;
+  schedule?: BackupSchedule;
+  timestampFallback?: "mtime";
+};
+
+export const BACKUP_SOURCES: readonly BackupSource[] = [
   { project: "Jucart", provider: "Supabase", log: "/home/rafa/dev/jucart/var/log/supabase-backup.cron.log" },
   { project: "Irati", provider: "Supabase", log: "/home/rafa/dev/irati-app/var/log/supabase-backup.cron.log" },
   { project: "encuesta-simple", provider: "Neon", log: "/home/rafa/dev/encuesta-simple/var/log/neon-backup.log" },
   { project: "Kamikazes", provider: "Neon", log: "/home/rafa/dev/kamikazes-app/var/log/neon-backup.log" },
-  { project: "loto-sync", provider: "Vercel Postgres", log: "/home/rafa/dev/loto-sync/backups/backup-cron.log" },
+  {
+    project: "loto-sync",
+    provider: "Vercel Postgres",
+    log: "/home/rafa/dev/loto-sync/backups/backup-cron.log",
+    schedule: { description: "los domingos, martes y viernes a las 04:30", daysOfWeek: [0, 2, 5], hour: 4, minute: 30, timezone: "Europe/Madrid" },
+  },
   { project: "Ofertas Radar", provider: "Prisma Postgres", log: "/home/rafa/dev/ofertas-radar/var/log/prisma-postgres-backup.log" },
   { project: "A Punto", provider: "PostgreSQL", log: "/home/rafa/dev/a-punto/var/log/postgres-backup.cron.log" },
   { project: "Mis Facturas", provider: "PostgreSQL", log: "/home/rafa/dev/mis-facturas/var/log/postgres-backup.cron.log" },
   { project: "Obsidian", provider: "Copia local", log: "/home/rafa/dev/backup-offsite/var/log/obsidian-backup.log" },
-  { project: "Google Drive", provider: "Copia externa", log: "/home/rafa/dev/backup-offsite/var/log/google-drive-backup.log" }
+  { project: "Google Drive", provider: "Copia externa", log: "/home/rafa/dev/backup-offsite/var/log/google-drive-backup.log" },
+  {
+    project: "TickTick",
+    provider: "Copia local",
+    log: "/home/rafa/dev/ticktick-backup/var/log/ticktick-backup.cron.log",
+    schedule: { description: "los domingos a las 06:15", daysOfWeek: [0], hour: 6, minute: 15, timezone: "Europe/Madrid" },
+    timestampFallback: "mtime",
+  },
 ] as const;
 
 export function timestampInLine(line: string): Date | undefined {
@@ -63,6 +88,12 @@ export function timestampInLine(line: string): Date | undefined {
   return undefined;
 }
 
+function scheduleNotice(window: ReportWindow, schedule?: BackupSchedule): string {
+  if (!schedule) return "";
+  const next = nextScheduledRun(window.end, schedule, schedule.timezone);
+  return ` La tarea no se ejecuta a diario: está programada ${schedule.description} (${schedule.timezone}). Próxima copia prevista: ${formatDateTime(next, schedule.timezone)}.`;
+}
+
 function filterLog(text: string, window: ReportWindow): string {
   let active: Date | undefined;
   return text.split(/\r?\n/).filter((line) => {
@@ -72,16 +103,25 @@ function filterLog(text: string, window: ReportWindow): string {
   }).join("\n").trim();
 }
 
-export function backupCheckFromLog(content: string, project: string, provider: string, window: ReportWindow): BackupCheck {
+export function backupCheckFromLog(
+  content: string,
+  project: string,
+  provider: string,
+  window: ReportWindow,
+  schedule?: BackupSchedule,
+  fallbackTimestamp?: Date,
+): BackupCheck {
   const lines = content.split(/\r?\n/);
-  const runs = lines.map((line) => ({ line, timestamp: timestampInLine(line) }))
-    .filter((run): run is { line: string; timestamp: Date } => Boolean(run.timestamp && inWindow(run.timestamp, window)));
+  const runs = lines.flatMap((line) => {
+    const timestamp = timestampInLine(line) ?? fallbackTimestamp;
+    return timestamp && inWindow(timestamp, window) ? [{ line, timestamp }] : [];
+  });
   type BackupEvent = { line: string; timestamp: Date; kind: "success" | "failure"; index: number };
   const events: BackupEvent[] = [];
   runs.forEach((run, index) => {
     if (/failed|failure|error|could not|no se pudo/i.test(run.line)) {
       events.push({ ...run, kind: "failure", index });
-    } else if (/backup created|backup SQL creado|^Local backup ready:|^OK:|Copia y comprobación finalizadas correctamente/i.test(run.line)) {
+    } else if (/backup created|backup SQL creado|^Local backup ready:|^OK:|Copia y comprobación finalizadas correctamente|Copia correcta:/i.test(run.line)) {
       events.push({ ...run, kind: "success", index });
     }
   });
@@ -94,17 +134,18 @@ export function backupCheckFromLog(content: string, project: string, provider: s
     provider,
     status,
     observedAt: latestSuccess?.timestamp.toISOString(),
-    detail: latestEvent?.line ?? `No hay ejecuciones en ${formatWindow(window)}.`,
+    detail: latestEvent?.line ?? `No hay ejecuciones en ${formatWindow(window)}.${scheduleNotice(window, schedule)}`,
   };
 }
 
 async function collectBackups(config: Config, window: ReportWindow): Promise<BackupCheck[]> {
-  return Promise.all(BACKUP_SOURCES.map(async ({ project, provider, log }) => {
+  return Promise.all(BACKUP_SOURCES.map(async ({ project, provider, log, schedule, timestampFallback }) => {
     try {
+      const metadata = timestampFallback === "mtime" ? await stat(log) : undefined;
       const content = await readFile(log, "utf8");
-      return backupCheckFromLog(content, project, provider, window);
+      return backupCheckFromLog(content, project, provider, window, schedule, metadata && new Date(metadata.mtimeMs));
     } catch (error) {
-      return { project, provider, status: "SIN EVIDENCIA", detail: `No se pudo leer el log de backup: ${String(error)}` };
+      return { project, provider, status: "SIN EVIDENCIA", detail: `No se pudo leer el log de backup: ${String(error)}.${scheduleNotice(window, schedule)}` };
     }
   }));
 }

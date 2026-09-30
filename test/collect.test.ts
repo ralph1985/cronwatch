@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { backupCheckFromLog, timestampInLine } from "../src/collect.js";
+import { BACKUP_SOURCES, backupCheckFromLog, timestampInLine } from "../src/collect.js";
 
 const window = {
   start: new Date("2026-09-11T22:00:00Z"),
@@ -92,4 +92,46 @@ test("marca como fallo un ERROR posterior del backup PostgreSQL de Mis Facturas"
   assert.equal(result.status, "FALLO");
   assert.equal(result.project, "Mis Facturas");
   assert.equal(result.provider, "PostgreSQL");
+});
+
+test("incluye TickTick entre las fuentes de copias", () => {
+  assert.deepEqual(BACKUP_SOURCES.find((source) => source.project === "TickTick"), {
+    project: "TickTick",
+    provider: "Copia local",
+    log: "/home/rafa/dev/ticktick-backup/var/log/ticktick-backup.cron.log",
+    schedule: {
+      description: "los domingos a las 06:15",
+      daysOfWeek: [0],
+      hour: 6,
+      minute: 15,
+      timezone: "Europe/Madrid",
+    },
+    timestampFallback: "mtime",
+  });
+});
+
+test("reconoce una copia correcta de TickTick usando la fecha del log", () => {
+  const source = BACKUP_SOURCES.find((candidate) => candidate.project === "TickTick");
+  const result = backupCheckFromLog(
+    "Copia correcta: /home/rafa/dev/ticktick-backup/var/backups/2026-09-12_04-15-01\nProyectos: 3; tareas: 12; subtareas: 4",
+    "TickTick",
+    "Copia local",
+    window,
+    source?.schedule,
+    new Date("2026-09-12T21:00:00.000Z"),
+  );
+
+  assert.equal(result.status, "OK");
+  assert.equal(result.project, "TickTick");
+  assert.equal(result.observedAt, "2026-09-12T21:00:00.000Z");
+});
+
+test("explica la ausencia de loto-sync y calcula la próxima copia", () => {
+  const source = BACKUP_SOURCES.find((candidate) => candidate.project === "loto-sync");
+  const result = backupCheckFromLog("", "loto-sync", "Vercel Postgres", window, source?.schedule);
+
+  assert.equal(result.status, "SIN EVIDENCIA");
+  assert.match(result.detail, /no se ejecuta a diario/);
+  assert.match(result.detail, /domingos, martes y viernes/);
+  assert.match(result.detail, /13\/9\/26, 4:30/);
 });

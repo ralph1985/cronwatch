@@ -12,8 +12,8 @@ function partsFor(date: Date, timezone: string): Record<string, number> {
   }).formatToParts(date).filter((part) => part.type !== "literal").map((part) => [part.type, Number(part.value)]));
 }
 
-function zonedDate(year: number, month: number, day: number, hour: number, timezone: string): Date {
-  const candidate = Date.UTC(year, month - 1, day, hour);
+function zonedDate(year: number, month: number, day: number, hour: number, timezone: string, minute = 0): Date {
+  const candidate = Date.UTC(year, month - 1, day, hour, minute);
   const local = partsFor(new Date(candidate), timezone);
   const localAsUtc = Date.UTC(local.year, local.month - 1, local.day, local.hour, local.minute, local.second);
   return new Date(candidate - (localAsUtc - candidate));
@@ -39,4 +39,34 @@ export function inWindow(date: Date, window: ReportWindow): boolean {
 export function formatWindow(window: ReportWindow): string {
   const formatter = new Intl.DateTimeFormat("sv-SE", { timeZone: window.timezone, dateStyle: "short", timeStyle: "short" });
   return `${formatter.format(window.start)} → ${formatter.format(window.end)}`;
+}
+
+export function formatDateTime(date: Date, timezone: string): string {
+  return new Intl.DateTimeFormat("es-ES", { timeZone: timezone, dateStyle: "short", timeStyle: "short" }).format(date);
+}
+
+export type WeeklySchedule = {
+  daysOfWeek: readonly number[];
+  hour: number;
+  minute: number;
+};
+
+export function nextScheduledRun(after: Date, schedule: WeeklySchedule, timezone: string): Date {
+  const local = partsFor(after, timezone);
+  const firstDay = new Date(Date.UTC(local.year, local.month - 1, local.day));
+  for (let offset = 0; offset <= 7; offset += 1) {
+    const day = new Date(firstDay);
+    day.setUTCDate(day.getUTCDate() + offset);
+    if (!schedule.daysOfWeek.includes(day.getUTCDay())) continue;
+    const candidate = zonedDate(
+      day.getUTCFullYear(),
+      day.getUTCMonth() + 1,
+      day.getUTCDate(),
+      schedule.hour,
+      timezone,
+      schedule.minute,
+    );
+    if (candidate > after) return candidate;
+  }
+  throw new Error("No se pudo calcular la próxima ejecución programada");
 }
