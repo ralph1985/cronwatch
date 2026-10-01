@@ -22,6 +22,10 @@ const evidence = {
 test("genera texto solo con la tabla de copias", () => {
   const report = buildTextReport(evidence);
   assert.match(report, /COPIAS DE SEGURIDAD/);
+  assert.match(report, /RESUMEN POR GRUPOS/);
+  assert.match(report, /Vida personal y hogar \| OK/);
+  assert.match(report, /Controles operativos \| AVISOS/);
+  assert.match(report, /VIDA PERSONAL Y HOGAR/);
   assert.match(report, /CronWatch \| Copia del crontab \| AVISOS/);
   assert.match(report, /Jucart \| Supabase \| OK/);
   assert.match(report, /Google Drive \| Copia externa \| OK/);
@@ -31,6 +35,8 @@ test("genera texto solo con la tabla de copias", () => {
 test("genera HTML solo con la tabla de copias", () => {
   const html = buildHtmlReport(evidence);
   assert.match(html, /Copias de seguridad nocturnas/);
+  assert.match(html, /Vida personal y hogar/);
+  assert.match(html, /Controles operativos/);
   assert.match(html, /Jucart.*Supabase.*OK/s);
   assert.match(html, /Google Drive.*Copia externa.*OK/s);
   assert.match(html, /CronWatch.*Copia del crontab.*AVISOS/s);

@@ -10,6 +10,14 @@ export const INCLUDED_PROJECTS = [
   { key: "a-punto", name: "A Punto", root: "/home/rafa/dev/a-punto" }
 ] as const;
 
+export const REPORT_GROUPS = [
+  { name: "Vida personal y hogar", projects: ["Jucart", "Irati", "A Punto", "Mis Facturas"] },
+  { name: "Eventos, grupos y participación", projects: ["Kamikazes", "loto-sync", "encuesta-simple"] },
+  { name: "Automatización y seguimiento", projects: ["Ofertas Radar"] },
+  { name: "Datos personales y productividad", projects: ["Obsidian", "TickTick"] },
+  { name: "Controles operativos", projects: ["CronWatch", "Google Drive"] },
+] as const;
+
 export function buildPrompt(evidenceJson: string): string {
   return "Analiza en español el paquete de evidencias de CronWatch incluido entre las marcas EVIDENCE.\n\n" +
     "Solo puedes leer y analizar el contenido incluido. No ejecutes comandos ni modifiques archivos.\n" +
@@ -70,31 +78,72 @@ function projectDetailsTable(section: string, status: "OK" | "AVISOS" | "FALLO",
   return `<div class="table-wrap"><table class="project-table"><tbody>${rows}</tbody></table></div>`;
 }
 
-function backupRows(evidence: Evidence): string {
-  const backupRows = evidence.backups.map((backup) => {
+function groupedBackups(evidence: Evidence) {
+  return REPORT_GROUPS.map((group) => ({
+    ...group,
+    backups: group.projects.flatMap((project) => evidence.backups.filter((backup) => backup.project === project)),
+  })).filter((group) => group.backups.length > 0);
+}
+
+function groupStatus(backups: Evidence["backups"]): "OK" | "AVISOS" | "FALLO" {
+  return backups.some((backup) => backup.status === "FALLO")
+    ? "FALLO"
+    : backups.some((backup) => backup.status === "AVISOS" || backup.status === "SIN EVIDENCIA")
+      ? "AVISOS"
+      : "OK";
+}
+
+function groupBreakdown(backups: Evidence["backups"]): string {
+  const counts = { OK: 0, AVISOS: 0, FALLO: 0, "SIN EVIDENCIA": 0 };
+  backups.forEach((backup) => { counts[backup.status] += 1; });
+  return (["OK", "AVISOS", "FALLO", "SIN EVIDENCIA"] as const)
+    .filter((status) => counts[status] > 0)
+    .map((status) => `${counts[status]} ${status}`)
+    .join(", ");
+}
+
+function backupRows(backups: Evidence["backups"], windowLabel: Intl.DateTimeFormat): string {
+  return backups.map((backup) => {
     const color = backup.status === "OK" ? "#15803d" : backup.status === "FALLO" ? "#b91c1c" : "#b45309";
-    const observed = backup.observedAt ? new Intl.DateTimeFormat("es-ES", { timeZone: evidence.timezone, dateStyle: "short", timeStyle: "short" }).format(new Date(backup.observedAt)) : "—";
+    const observed = backup.observedAt ? windowLabel.format(new Date(backup.observedAt)) : "—";
     return `<tr><td>${escapeHtml(backup.project)}</td><td>${escapeHtml(backup.provider)}</td><td><span class="status" style="color:${color};border-color:${color}">${backup.status}</span></td><td>${observed}</td><td>${escapeHtml(backup.detail)}</td></tr>`;
   }).join("");
-  return backupRows;
 }
 
 export function buildTextReport(evidence: Evidence): string {
   const windowLabel = new Intl.DateTimeFormat("es-ES", { timeZone: evidence.timezone, dateStyle: "short", timeStyle: "short" });
   const windowText = `${windowLabel.format(new Date(evidence.window.start))} → ${windowLabel.format(new Date(evidence.window.end))}`;
-  const rows = evidence.backups.map((backup) => `- ${backup.project} | ${backup.provider} | ${backup.status} | ${backup.observedAt ? windowLabel.format(new Date(backup.observedAt)) : "—"} | ${backup.detail}`);
-  return ["CRONWATCH — COPIAS DE SEGURIDAD", `Ventana analizada: ${windowText}`, "", "Proyecto | Servicio | Estado | Última correcta | Evidencia", ...rows].join("\n");
+  const groups = groupedBackups(evidence);
+  const summary = groups.map((group) => `- ${group.name} | ${groupStatus(group.backups)} | ${groupBreakdown(group.backups)}`);
+  const sections = groups.flatMap((group) => [
+    group.name.toUpperCase(),
+    `Estado del grupo: ${groupStatus(group.backups)} (${groupBreakdown(group.backups)})`,
+    "Proyecto | Servicio | Estado | Última correcta | Evidencia",
+    ...group.backups.map((backup) => `- ${backup.project} | ${backup.provider} | ${backup.status} | ${backup.observedAt ? windowLabel.format(new Date(backup.observedAt)) : "—"} | ${backup.detail}`),
+    "",
+  ]);
+  return ["CRONWATCH — COPIAS DE SEGURIDAD", `Ventana analizada: ${windowText}`, "", "RESUMEN POR GRUPOS", ...summary, "", ...sections].join("\n").trim();
 }
 
 export function buildHtmlReport(evidence: Evidence): string {
   const overall = evidence.backups.map((backup) => backup.status);
   const overallStatus = overall.includes("FALLO") ? "FALLO" : overall.includes("AVISOS") || overall.includes("SIN EVIDENCIA") ? "AVISOS" : "OK";
   const overallColor = overallStatus === "OK" ? "#15803d" : overallStatus === "FALLO" ? "#b91c1c" : "#b45309";
-  const rows = backupRows(evidence);
   const windowLabel = new Intl.DateTimeFormat("es-ES", { timeZone: evidence.timezone, dateStyle: "short", timeStyle: "short" });
   const windowText = `${windowLabel.format(new Date(evidence.window.start))} → ${windowLabel.format(new Date(evidence.window.end))}`;
-  const backupTable = `<section class="card"><h2>Copias de seguridad nocturnas</h2><p class="meta">Ventana analizada: ${windowText}</p><div class="table-wrap"><table><thead><tr><th>Proyecto</th><th>Servicio</th><th>Estado</th><th>Última correcta</th><th>Evidencia</th></tr></thead><tbody>${rows || `<tr><td colspan="5">No hay datos de copias.</td></tr>`}</tbody></table></div></section>`;
-  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>CronWatch</title></head><body style="margin:0;background:#f3f4f6;color:#172033;font-family:Arial,Helvetica,sans-serif"><main style="max-width:900px;margin:0 auto;padding:24px 14px"><header style="background:#172033;color:#fff;border-radius:18px;padding:24px;margin-bottom:16px"><p style="margin:0 0 8px;color:#b8c7e6;font-size:12px;letter-spacing:.12em;text-transform:uppercase">CronWatch</p><h1 style="margin:0 0 14px;font-size:26px">Copias de seguridad nocturnas</h1><span class="status" style="color:${overallColor};border-color:${overallColor};background:#fff">${overallStatus}</span></header>${backupTable}<footer style="color:#667085;font-size:12px;padding:12px 4px">Informe generado por CronWatch.</footer></main><style>.card{background:#fff;border-radius:16px;padding:20px;margin-bottom:14px;box-shadow:0 2px 10px #17203312}.status{display:inline-block;border:1px solid;border-radius:999px;padding:5px 10px;font-size:12px;font-weight:700;background:#fff}.meta{margin:0 0 16px;color:#667085;font-size:13px}.table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;vertical-align:top;padding:10px 8px;border-bottom:1px solid #e5e7eb}th{color:#667085;font-size:11px;text-transform:uppercase;letter-spacing:.04em}</style></body></html>`;
+  const groups = groupedBackups(evidence);
+  const summary = groups.map((group) => {
+    const status = groupStatus(group.backups);
+    const color = status === "OK" ? "#15803d" : status === "FALLO" ? "#b91c1c" : "#b45309";
+    return `<li><strong>${escapeHtml(group.name)}</strong>: <span class="status" style="color:${color};border-color:${color}">${status}</span> <span class="meta">(${groupBreakdown(group.backups)})</span></li>`;
+  }).join("");
+  const backupTables = groups.map((group) => {
+    const status = groupStatus(group.backups);
+    const color = status === "OK" ? "#15803d" : status === "FALLO" ? "#b91c1c" : "#b45309";
+    return `<section class="card"><div class="group-title"><div><h2>${escapeHtml(group.name)}</h2><p class="meta">${groupBreakdown(group.backups)}</p></div><span class="status" style="color:${color};border-color:${color}">${status}</span></div><div class="table-wrap"><table><thead><tr><th>Proyecto</th><th>Servicio</th><th>Estado</th><th>Última correcta</th><th>Evidencia</th></tr></thead><tbody>${backupRows(group.backups, windowLabel)}</tbody></table></div></section>`;
+  }).join("");
+  const backupTable = `<section class="card"><h2>Resumen por grupos</h2><p class="meta">Ventana analizada: ${windowText}</p><ul class="summary">${summary || "<li>No hay datos de copias.</li>"}</ul></section>${backupTables}`;
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>CronWatch</title></head><body style="margin:0;background:#f3f4f6;color:#172033;font-family:Arial,Helvetica,sans-serif"><main style="max-width:900px;margin:0 auto;padding:24px 14px"><header style="background:#172033;color:#fff;border-radius:18px;padding:24px;margin-bottom:16px"><p style="margin:0 0 8px;color:#b8c7e6;font-size:12px;letter-spacing:.12em;text-transform:uppercase">CronWatch</p><h1 style="margin:0 0 14px;font-size:26px">Copias de seguridad nocturnas</h1><span class="status" style="color:${overallColor};border-color:${overallColor};background:#fff">${overallStatus}</span></header>${backupTable}<footer style="color:#667085;font-size:12px;padding:12px 4px">Informe generado por CronWatch.</footer></main><style>.card{background:#fff;border-radius:16px;padding:20px;margin-bottom:14px;box-shadow:0 2px 10px #17203312}.status{display:inline-block;border:1px solid;border-radius:999px;padding:5px 10px;font-size:12px;font-weight:700;background:#fff}.meta{margin:0 0 16px;color:#667085;font-size:13px}.group-title{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}.summary{margin:0;padding-left:20px}.summary li{margin:8px 0}.table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;vertical-align:top;padding:10px 8px;border-bottom:1px solid #e5e7eb}th{color:#667085;font-size:11px;text-transform:uppercase;letter-spacing:.04em}</style></body></html>`;
 }
 
 export function fallbackReport(evidence: Evidence, error?: string): string {
