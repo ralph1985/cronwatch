@@ -5,7 +5,7 @@ import path from "node:path";
 import type { Config } from "./config.js";
 import { limitText } from "./redaction.js";
 import type { BackupCheck, Evidence, ScheduledJob, JobSource } from "./types.js";
-import { formatDateTime, formatWindow, inWindow, nextScheduledRun, reportWindow, type ReportWindow, type WeeklySchedule } from "./time-window.js";
+import { formatDateTime, formatWindow, inWindow, nextScheduledRun, reportWindow, type ReportWindow, type Schedule } from "./time-window.js";
 
 const exec = promisify(execFile);
 const CRON_RE = /^(\S+\s+\S+\s+\S+\s+\S+\s+\S+)\s+(.+)$/;
@@ -40,7 +40,7 @@ async function commandText(command: string, args: string[]): Promise<{ ok: boole
   }
 }
 
-export type BackupSchedule = WeeklySchedule & {
+export type BackupSchedule = Schedule & {
   description: string;
   timezone: string;
 };
@@ -54,26 +54,66 @@ type BackupSource = {
 };
 
 export const BACKUP_SOURCES: readonly BackupSource[] = [
-  { project: "Jucart", provider: "Supabase", log: "/home/rafa/dev/jucart/var/log/supabase-backup.cron.log" },
-  { project: "Irati", provider: "Supabase", log: "/home/rafa/dev/irati-app/var/log/supabase-backup.cron.log" },
-  { project: "encuesta-simple", provider: "Neon", log: "/home/rafa/dev/encuesta-simple/var/log/neon-backup.log" },
-  { project: "Kamikazes", provider: "Neon", log: "/home/rafa/dev/kamikazes-app/var/log/neon-backup.log" },
+  {
+    project: "Jucart",
+    provider: "Supabase",
+    log: "/home/rafa/dev/jucart/var/log/supabase-backup.cron.log",
+    schedule: { kind: "day-of-month-step", description: "días alternos del calendario a las 03:30", startDay: 1, dayStep: 2, hour: 3, minute: 30, timezone: "Europe/Madrid" },
+  },
+  {
+    project: "Irati",
+    provider: "Supabase",
+    log: "/home/rafa/dev/irati-app/var/log/supabase-backup.cron.log",
+    schedule: { kind: "weekly", description: "los domingos a las 00:00", daysOfWeek: [0], hour: 0, minute: 0, timezone: "Europe/Madrid" },
+  },
+  {
+    project: "encuesta-simple",
+    provider: "Neon",
+    log: "/home/rafa/dev/encuesta-simple/var/log/neon-backup.log",
+    schedule: { kind: "monthly", description: "el día 1 de cada mes a las 03:00", dayOfMonth: 1, hour: 3, minute: 0, timezone: "Europe/Madrid" },
+  },
+  {
+    project: "Kamikazes",
+    provider: "Neon",
+    log: "/home/rafa/dev/kamikazes-app/var/log/neon-backup.log",
+    schedule: { kind: "monthly", description: "el día 1 de cada mes a las 02:00", dayOfMonth: 1, hour: 2, minute: 0, timezone: "Europe/Madrid" },
+  },
   {
     project: "loto-sync",
     provider: "Vercel Postgres",
     log: "/home/rafa/dev/loto-sync/backups/backup-cron.log",
-    schedule: { description: "los domingos, martes y viernes a las 04:30", daysOfWeek: [0, 2, 5], hour: 4, minute: 30, timezone: "Europe/Madrid" },
+    schedule: { kind: "weekly", description: "los domingos, martes y viernes a las 04:30", daysOfWeek: [0, 2, 5], hour: 4, minute: 30, timezone: "Europe/Madrid" },
   },
-  { project: "Ofertas Radar", provider: "Prisma Postgres", log: "/home/rafa/dev/ofertas-radar/var/log/prisma-postgres-backup.log" },
-  { project: "A Punto", provider: "PostgreSQL", log: "/home/rafa/dev/a-punto/var/log/postgres-backup.cron.log" },
-  { project: "Mis Facturas", provider: "PostgreSQL", log: "/home/rafa/dev/mis-facturas/var/log/postgres-backup.cron.log" },
-  { project: "Obsidian", provider: "Copia local", log: "/home/rafa/dev/backup-offsite/var/log/obsidian-backup.log" },
+  {
+    project: "Ofertas Radar",
+    provider: "Prisma Postgres",
+    log: "/home/rafa/dev/ofertas-radar/var/log/prisma-postgres-backup.log",
+    schedule: { kind: "weekly", description: "los lunes a las 02:30", daysOfWeek: [1], hour: 2, minute: 30, timezone: "Europe/Madrid" },
+  },
+  {
+    project: "A Punto",
+    provider: "PostgreSQL",
+    log: "/home/rafa/dev/a-punto/var/log/postgres-backup.cron.log",
+    schedule: { kind: "weekly", description: "los miércoles a las 02:30", daysOfWeek: [3], hour: 2, minute: 30, timezone: "Europe/Madrid" },
+  },
+  {
+    project: "Mis Facturas",
+    provider: "PostgreSQL",
+    log: "/home/rafa/dev/mis-facturas/var/log/postgres-backup.cron.log",
+    schedule: { kind: "weekly", description: "los jueves a las 02:30", daysOfWeek: [4], hour: 2, minute: 30, timezone: "Europe/Madrid" },
+  },
+  {
+    project: "Obsidian",
+    provider: "Copia local",
+    log: "/home/rafa/dev/backup-offsite/var/log/obsidian-backup.log",
+    schedule: { kind: "weekly", description: "los martes a las 02:30", daysOfWeek: [2], hour: 2, minute: 30, timezone: "Europe/Madrid" },
+  },
   { project: "Google Drive", provider: "Copia externa", log: "/home/rafa/dev/backup-offsite/var/log/google-drive-backup.log" },
   {
     project: "TickTick",
     provider: "Copia local",
     log: "/home/rafa/dev/ticktick-backup/var/log/ticktick-backup.cron.log",
-    schedule: { description: "los domingos a las 06:15", daysOfWeek: [0], hour: 6, minute: 15, timezone: "Europe/Madrid" },
+    schedule: { kind: "weekly", description: "los domingos a las 06:15", daysOfWeek: [0], hour: 6, minute: 15, timezone: "Europe/Madrid" },
     timestampFallback: "mtime",
   },
 ] as const;

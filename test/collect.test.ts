@@ -100,6 +100,7 @@ test("incluye TickTick entre las fuentes de copias", () => {
     provider: "Copia local",
     log: "/home/rafa/dev/ticktick-backup/var/log/ticktick-backup.cron.log",
     schedule: {
+      kind: "weekly",
       description: "los domingos a las 06:15",
       daysOfWeek: [0],
       hour: 6,
@@ -134,4 +135,44 @@ test("explica la ausencia de loto-sync y calcula la próxima copia", () => {
   assert.match(result.detail, /no se ejecuta a diario/);
   assert.match(result.detail, /domingos, martes y viernes/);
   assert.match(result.detail, /13\/9\/26, 4:30/);
+});
+
+test("explica la próxima ejecución de un backup semanal nuevo", () => {
+  const source = BACKUP_SOURCES.find((candidate) => candidate.project === "Ofertas Radar");
+  const result = backupCheckFromLog("", "Ofertas Radar", "Prisma Postgres", window, source?.schedule);
+
+  assert.equal(result.status, "SIN EVIDENCIA");
+  assert.match(result.detail, /lunes a las 02:30/);
+  assert.match(result.detail, /14\/9\/26, 2:30/);
+});
+
+test("explica la próxima ejecución de un backup mensual nuevo", () => {
+  const source = BACKUP_SOURCES.find((candidate) => candidate.project === "Kamikazes");
+  const result = backupCheckFromLog("", "Kamikazes", "Neon", window, source?.schedule);
+
+  assert.equal(result.status, "SIN EVIDENCIA");
+  assert.match(result.detail, /día 1 de cada mes a las 02:00/);
+  assert.match(result.detail, /1\/10\/26, 2:00/);
+});
+
+test("explica los días alternos de Jucart al calcular la próxima copia", () => {
+  const source = BACKUP_SOURCES.find((candidate) => candidate.project === "Jucart");
+  const result = backupCheckFromLog("", "Jucart", "Supabase", window, source?.schedule);
+
+  assert.equal(result.status, "SIN EVIDENCIA");
+  assert.match(result.detail, /días alternos del calendario a las 03:30/);
+  assert.match(result.detail, /13\/9\/26, 3:30/);
+});
+
+test("reinicia el patrón de días alternos de Jucart al cambiar de mes", () => {
+  const source = BACKUP_SOURCES.find((candidate) => candidate.project === "Jucart");
+  const result = backupCheckFromLog(
+    "",
+    "Jucart",
+    "Supabase",
+    { start: new Date("2026-09-29T22:00:00Z"), end: new Date("2026-09-30T22:00:00Z"), timezone: "Europe/Madrid" },
+    source?.schedule,
+  );
+
+  assert.match(result.detail, /1\/10\/26, 3:30/);
 });
